@@ -1264,7 +1264,8 @@ describe("TeamsAdapter", () => {
 
   describe("fetchMessages", () => {
     it("should throw NotImplementedError when no appTenantId configured", async () => {
-      const adapter = createTeamsAdapter({
+      // Use TeamsAdapter directly to bypass createTeamsAdapter's env var fallback
+      const adapter = new TeamsAdapter({
         appId: "test",
         appPassword: "test",
         logger: mockLogger,
@@ -1603,7 +1604,8 @@ describe("TeamsAdapter", () => {
 
   describe("openDM", () => {
     it("should throw ValidationError when no tenantId available", async () => {
-      const adapter = createTeamsAdapter({
+      // Use TeamsAdapter directly to bypass createTeamsAdapter's env var fallback
+      const adapter = new TeamsAdapter({
         appId: "test",
         appPassword: "test",
         logger: mockLogger,
@@ -2804,7 +2806,8 @@ describe("TeamsAdapter", () => {
 
   describe("fetchChannelMessages", () => {
     it("should throw NotImplementedError when no appTenantId", async () => {
-      const adapter = createTeamsAdapter({
+      // Use TeamsAdapter directly to bypass createTeamsAdapter's env var fallback
+      const adapter = new TeamsAdapter({
         appId: "test",
         appPassword: "test",
         logger: mockLogger,
@@ -2920,7 +2923,8 @@ describe("TeamsAdapter", () => {
 
   describe("listThreads", () => {
     it("should throw NotImplementedError when no appTenantId", async () => {
-      const adapter = createTeamsAdapter({
+      // Use TeamsAdapter directly to bypass createTeamsAdapter's env var fallback
+      const adapter = new TeamsAdapter({
         appId: "test",
         appPassword: "test",
         logger: mockLogger,
