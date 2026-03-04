@@ -7,7 +7,7 @@ type: reference
 `PostableMessage` is the union of all message formats accepted by `thread.post()` and `sent.edit()`.
 
 ```typescript
-type PostableMessage = AdapterPostableMessage | AsyncIterable<string | StreamEvent>;
+type PostableMessage = AdapterPostableMessage | AsyncIterable<string | StreamChunk | StreamEvent>;
 ```
 
 ## String
@@ -135,7 +135,9 @@ await thread.post({
 
 ## AsyncIterable (streaming)
 
-An async iterable of strings or stream events. The SDK streams the message in real time using platform-native APIs where available.
+An async iterable of strings, `StreamChunk` objects, or stream events. The SDK streams the message in real time using platform-native APIs where available.
+
+You can yield structured `StreamChunk` objects for rich content like task progress cards on platforms that support it (Slack). See [Streaming](/docs/streaming#structured-streaming-chunks-slack-only) for details.
 
 Both AI SDK stream types are supported:
 

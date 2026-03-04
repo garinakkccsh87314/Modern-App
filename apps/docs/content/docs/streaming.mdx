@@ -6,7 +6,7 @@ prerequisites:
   - /docs/usage
 ---
 
-Chat SDK accepts any `AsyncIterable<string>` as a message, enabling real-time streaming of AI responses and other incremental content to chat platforms.
+Chat SDK accepts any `AsyncIterable<string>` as a message, enabling real-time streaming of AI responses and other incremental content to chat platforms. For platforms with native streaming support (Slack), you can also stream structured `StreamChunk` objects for rich content like task progress cards and plan updates.
 
 ## AI SDK integration
 
@@ -103,6 +103,64 @@ The final message uses the raw accumulated text without healing, so the original
 When streaming content that contains GFM tables (e.g. from an LLM), the SDK automatically buffers potential table headers until a separator line (`|---|---|`) confirms them. This prevents tables from briefly flashing as raw pipe-delimited text before the table structure is complete.
 
 This happens transparently — no configuration needed.
+
+## Structured streaming chunks (Slack only)
+
+For Slack's native streaming API, you can yield `StreamChunk` objects alongside plain text for rich content:
+
+```typescript title="lib/bot.ts" lineNumbers
+import type { StreamChunk } from "chat";
+
+const stream = (async function* () {
+  yield { type: "markdown_text", text: "Searching..." } satisfies StreamChunk;
+
+  yield {
+    type: "task_update",
+    id: "search-1",
+    title: "Searching documents",
+    status: "in_progress",
+  } satisfies StreamChunk;
+
+  // ... do work ...
+
+  yield {
+    type: "task_update",
+    id: "search-1",
+    title: "Searching documents",
+    status: "complete",
+    output: "Found 3 results",
+  } satisfies StreamChunk;
+
+  yield { type: "markdown_text", text: "Here are your results..." } satisfies StreamChunk;
+})();
+
+await thread.post(stream);
+```
+
+### Chunk types
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| `markdown_text` | `text` | Streamed text content |
+| `task_update` | `id`, `title`, `status`, `output?` | Tool/step progress cards (`pending`, `in_progress`, `complete`, `error`) |
+| `plan_update` | `title` | Plan title updates |
+
+### Task display mode
+
+Control how `task_update` chunks render in Slack by passing `taskDisplayMode` in stream options:
+
+```typescript
+await thread.stream(stream, {
+  taskDisplayMode: "plan", // Group all tasks into a single plan block
+});
+```
+
+| Mode | Description |
+|------|-------------|
+| `"timeline"` | Individual task cards shown inline with text (default) |
+| `"plan"` | All tasks grouped into a single plan block |
+
+Adapters without structured chunk support extract text from `markdown_text` chunks and ignore other types.
 
 ## Stop blocks (Slack only)
 
