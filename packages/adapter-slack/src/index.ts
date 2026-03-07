@@ -62,6 +62,8 @@ import {
   type SlackModalResponse,
 } from "./modals";
 
+const SLACK_USER_ID_PATTERN = /^[A-Z0-9_]+$/;
+
 export interface SlackAdapterConfig {
   /** Bot token (xoxb-...). Required for single-workspace mode. Omit for multi-workspace. */
   botToken?: string;
@@ -1529,12 +1531,23 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     text: string,
     skipSelfMention: boolean
   ): Promise<string> {
-    const mentionPattern = /<@([A-Z0-9]+)(?:\|[^>]*)?>/g;
     const userIds = new Set<string>();
-    let match: RegExpExecArray | null = mentionPattern.exec(text);
-    while (match) {
-      userIds.add(match[1]);
-      match = mentionPattern.exec(text);
+    // Parse mentions by splitting on angle brackets to avoid ReDoS
+    for (const segment of text.split("<")) {
+      const end = segment.indexOf(">");
+      if (end === -1) {
+        continue;
+      }
+      const inner = segment.slice(0, end);
+      if (!inner.startsWith("@")) {
+        continue;
+      }
+      const rest = inner.slice(1);
+      const pipeIdx = rest.indexOf("|");
+      const uid = pipeIdx >= 0 ? rest.slice(0, pipeIdx) : rest;
+      if (SLACK_USER_ID_PATTERN.test(uid)) {
+        userIds.add(uid);
+      }
     }
     if (userIds.size === 0) {
       return text;
@@ -1559,10 +1572,30 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
     const nameMap = new Map(lookups);
 
     // Replace <@U123> and <@U123|old> with <@U123|resolvedName>
-    return text.replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_m, uid: string) => {
-      const name = nameMap.get(uid);
-      return name ? `<@${uid}|${name}>` : `<@${uid}>`;
-    });
+    // Use split-based approach to avoid ReDoS on user-controlled input
+    let result = "";
+    let remaining = text;
+    let startIdx = remaining.indexOf("<@");
+    while (startIdx !== -1) {
+      result += remaining.slice(0, startIdx);
+      remaining = remaining.slice(startIdx);
+      const endIdx = remaining.indexOf(">");
+      if (endIdx === -1) {
+        break;
+      }
+      const inner = remaining.slice(2, endIdx); // after "<@"
+      const pipeIdx = inner.indexOf("|");
+      const uid = pipeIdx >= 0 ? inner.slice(0, pipeIdx) : inner;
+      if (SLACK_USER_ID_PATTERN.test(uid)) {
+        const name = nameMap.get(uid);
+        result += name ? `<@${uid}|${name}>` : `<@${uid}>`;
+      } else {
+        result += remaining.slice(0, endIdx + 1);
+      }
+      remaining = remaining.slice(endIdx + 1);
+      startIdx = remaining.indexOf("<@");
+    }
+    return result + remaining;
   }
 
   private async parseSlackMessage(

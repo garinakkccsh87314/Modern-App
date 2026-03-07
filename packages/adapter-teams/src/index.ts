@@ -1715,7 +1715,14 @@ export class TeamsAdapter implements Adapter<TeamsThreadId, unknown> {
     // For HTML content, strip tags (basic implementation)
     let text = "";
     if (msg.body?.content) {
-      text = msg.body.content.replace(/<[^>]*>/g, "").trim();
+      // Loop to handle nested/reconstructed tags (e.g. "<scr<script>ipt>")
+      let stripped = msg.body.content;
+      let prev: string;
+      do {
+        prev = stripped;
+        stripped = stripped.replace(/<[^>]*>/g, "");
+      } while (stripped !== prev);
+      text = stripped.trim();
     }
 
     // If text is empty but message has adaptive card attachments, try to extract card title

@@ -116,7 +116,7 @@ class Recorder {
       this.redis.on("error", (err) =>
         console.error("[recorder] Redis error:", err)
       );
-      console.log(`[recorder] Recording enabled, session: ${this.sessionId}`);
+      console.log("[recorder] Recording enabled");
     }
   }
 

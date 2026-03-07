@@ -76,12 +76,12 @@ export class SlackFormatConverter extends BaseFormatConverter {
     let markdown = mrkdwn;
 
     // User mentions: <@U123|name> -> @name or <@U123> -> @U123
-    markdown = markdown.replace(/<@([^|>]+)\|([^>]+)>/g, "@$2");
-    markdown = markdown.replace(/<@([^>]+)>/g, "@$1");
+    markdown = markdown.replace(/<@([A-Z0-9_]+)\|([^>]+)>/g, "@$2");
+    markdown = markdown.replace(/<@([A-Z0-9_]+)>/g, "@$1");
 
     // Channel mentions: <#C123|name> -> #name
-    markdown = markdown.replace(/<#[^|>]+\|([^>]+)>/g, "#$1");
-    markdown = markdown.replace(/<#([^>]+)>/g, "#$1");
+    markdown = markdown.replace(/<#[A-Z0-9_]+\|([^>]+)>/g, "#$1");
+    markdown = markdown.replace(/<#([A-Z0-9_]+)>/g, "#$1");
 
     // Links: <url|text> -> [text](url)
     markdown = markdown.replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g, "[$2]($1)");
