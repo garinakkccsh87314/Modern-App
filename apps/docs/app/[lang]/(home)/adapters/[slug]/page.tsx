@@ -105,6 +105,9 @@ export const generateMetadata = async ({
   return {
     title: adapter.name,
     description: adapter.description,
+    openGraph: {
+      images: `/en/adapters/${slug}/og`,
+    },
   };
 };
 
