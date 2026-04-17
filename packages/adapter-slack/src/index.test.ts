@@ -2345,7 +2345,7 @@ describe("postMessage", () => {
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "C123",
-        thread_ts: "",
+        thread_ts: undefined,
       })
     );
   });
@@ -2441,7 +2441,7 @@ describe("postEphemeral", () => {
     );
   });
 
-  it("omits thread_ts when empty", async () => {
+  it("normalizes empty threadTs to undefined", async () => {
     const adapter = createSlackAdapter({
       botToken: "xoxb-test-token",
       signingSecret: secret,
@@ -3395,7 +3395,7 @@ describe("postChannelMessage", () => {
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "C123",
-        thread_ts: "",
+        thread_ts: undefined,
       })
     );
   });
@@ -5188,5 +5188,63 @@ describe("reverse user lookup", () => {
       expect(rehydrated.fetchData).toBeUndefined();
       expect(rehydrated).toBe(attachment);
     });
+  });
+});
+
+// ============================================================================
+// Empty threadTs normalization tests
+// ============================================================================
+
+describe("stream with empty threadTs", () => {
+  it("throws ValidationError when threadTs is empty", async () => {
+    const adapter = createSlackAdapter({
+      botToken: "xoxb-test-token",
+      signingSecret: "test-signing-secret",
+      logger: mockLogger,
+    });
+
+    async function* emptyStream() {
+      yield "hello";
+    }
+
+    await expect(
+      adapter.stream("slack:C123:", emptyStream(), {
+        recipientUserId: "U123",
+        recipientTeamId: "T123",
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+});
+
+describe("scheduleMessage with empty threadTs", () => {
+  it("normalizes empty threadTs to undefined", async () => {
+    const adapter = createSlackAdapter({
+      botToken: "xoxb-test-token",
+      signingSecret: "test-signing-secret",
+      logger: mockLogger,
+    });
+
+    mockClientMethod(
+      adapter,
+      "chat.scheduleMessage",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        scheduled_message_id: "Q123",
+        post_at: Math.floor(Date.now() / 1000) + 3600,
+      })
+    );
+
+    const futureDate = new Date(Date.now() + 3600 * 1000);
+    await adapter.scheduleMessage("slack:C123:", "Scheduled msg", {
+      postAt: futureDate,
+    });
+
+    const client = getClient(adapter);
+    expect(client.chat.scheduleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C123",
+        thread_ts: undefined,
+      })
+    );
   });
 });
