@@ -37,6 +37,7 @@ import type {
   ReactionEvent,
   Root,
   ScheduledMessage,
+  SelectOptionElement,
   StreamChunk,
   StreamOptions,
   ThreadInfo,
@@ -69,10 +70,15 @@ import {
   encodeModalMetadata,
   modalToSlackView,
   type SlackModalResponse,
+  selectOptionToSlackOption,
 } from "./modals";
 
 const SLACK_USER_ID_PATTERN = /^[A-Z0-9_]+$/;
 const SLACK_USER_ID_EXACT_PATTERN = /^U[A-Z0-9]+$/;
+
+// Slack expects block_suggestion responses within 3s. Leave headroom for
+// network latency so the HTTP response lands before Slack gives up.
+const OPTIONS_LOAD_TIMEOUT_MS = 2500;
 
 /** Find the next `<@` or `<#` mention in text. */
 function findNextMention(text: string): number {
@@ -373,8 +379,24 @@ interface SlackViewClosedPayload {
   };
 }
 
+interface SlackBlockSuggestionPayload {
+  action_id: string;
+  block_id: string;
+  team?: {
+    id: string;
+  };
+  type: "block_suggestion";
+  user: {
+    id: string;
+    username?: string;
+    name?: string;
+  };
+  value?: string;
+}
+
 type SlackInteractivePayload =
   | SlackBlockActionsPayload
+  | SlackBlockSuggestionPayload
   | SlackViewSubmissionPayload
   | SlackViewClosedPayload;
 
@@ -1080,6 +1102,9 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
         this.handleBlockActions(payload, options);
         return new Response("", { status: 200 });
 
+      case "block_suggestion":
+        return this.handleBlockSuggestion(payload, options);
+
       case "view_submission":
         return this.handleViewSubmission(payload, options);
 
@@ -1210,6 +1235,79 @@ export class SlackAdapter implements Adapter<SlackThreadId, unknown> {
 
       this.chat.processAction(actionEvent, options);
     }
+  }
+
+  private async handleBlockSuggestion(
+    payload: SlackBlockSuggestionPayload,
+    options?: WebhookOptions
+  ): Promise<Response> {
+    if (!this.chat) {
+      this.logger.warn(
+        "Chat instance not initialized, ignoring block suggestion"
+      );
+      return this.optionsLoadResponse([]);
+    }
+
+    const loadPromise = this.chat.processOptionsLoad(
+      {
+        actionId: payload.action_id,
+        query: payload.value ?? "",
+        user: {
+          userId: payload.user.id,
+          userName:
+            payload.user.username || payload.user.name || payload.user.id,
+          fullName:
+            payload.user.name || payload.user.username || payload.user.id,
+          isBot: false,
+          isMe: false,
+        },
+        adapter: this as Adapter,
+        raw: payload,
+      },
+      options
+    );
+
+    // Slack requires a response within 3s for block_suggestion and does not
+    // support an async ack pattern — options must be in the response body.
+    // Race the handler against a budget and fall back to an empty 200 so the
+    // menu shows "No results" instead of hanging or erroring for the user.
+    const timeoutSentinel = Symbol("options_load_timeout");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<typeof timeoutSentinel>((resolve) => {
+      timer = setTimeout(
+        () => resolve(timeoutSentinel),
+        OPTIONS_LOAD_TIMEOUT_MS
+      );
+    });
+
+    const result = await Promise.race([loadPromise, timeoutPromise]);
+    if (timer) {
+      clearTimeout(timer);
+    }
+
+    if (result === timeoutSentinel) {
+      this.logger.warn("Options load handler timed out", {
+        actionId: payload.action_id,
+        timeoutMs: OPTIONS_LOAD_TIMEOUT_MS,
+      });
+      loadPromise.catch((err) =>
+        this.logger.error("Options load handler error after timeout", {
+          error: err,
+          actionId: payload.action_id,
+        })
+      );
+      return this.optionsLoadResponse([]);
+    }
+
+    return this.optionsLoadResponse(result ?? []);
+  }
+
+  private optionsLoadResponse(options: SelectOptionElement[]): Response {
+    const slackOptions = options.slice(0, 100).map(selectOptionToSlackOption);
+    return new Response(JSON.stringify({ options: slackOptions }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   private async handleViewSubmission(
