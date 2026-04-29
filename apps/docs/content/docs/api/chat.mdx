@@ -444,6 +444,80 @@ await dm.post("Hello via DM!");
 const dm = await bot.openDM(message.author);
 ```
 
+### getUser
+
+Look up user information by user ID. Returns a `UserInfo` object with name, email, avatar, and bot status, or `null` if the user was not found. Supported on Slack, Microsoft Teams, Discord, Google Chat, GitHub, Linear, and Telegram. Other adapters will throw `NOT_SUPPORTED`.
+
+```typescript
+const user = await bot.getUser("U123456");
+console.log(user?.email);    // "alice@company.com"
+console.log(user?.fullName); // "Alice Smith"
+```
+
+```typescript
+// Or with an Author object from a message handler
+const user = await bot.getUser(message.author);
+```
+
+<TypeTable
+  type={{
+    userId: {
+      description: 'Platform-specific user ID.',
+      type: 'string',
+    },
+    userName: {
+      description: 'Username/handle.',
+      type: 'string',
+    },
+    fullName: {
+      description: 'Display name / full name.',
+      type: 'string',
+    },
+    isBot: {
+      description: 'Whether the user is a bot.',
+      type: 'boolean',
+    },
+    email: {
+      description: 'Email address (requires scopes on some platforms).',
+      type: 'string | undefined',
+    },
+    avatarUrl: {
+      description: 'Profile image URL.',
+      type: 'string | undefined',
+    },
+  }}
+/>
+
+<Callout type="info">
+  **Per-platform constraints:**
+  - **Slack** — requires both `users:read` and `users:read.email` scopes (the email scope must be granted at OAuth install time).
+  - **Discord** — bot tokens never see email (the `email` OAuth scope only applies in user-context auth).
+  - **Telegram** — bots can only look up users who have previously messaged them.
+  - **Microsoft Teams** — only works for users who previously interacted with the bot (cached from webhook activity). `avatarUrl` is not returned (Graph API requires a separate photo call).
+  - **Google Chat** — same caching constraint as Teams: only users seen in prior webhooks.
+  - **GitHub** — `email` is `null` unless the user made it public, or you authenticated with the `user:email` scope.
+  - **Linear** — full profile (incl. email + avatar) for any active workspace member.
+
+  Fields that aren't available return `undefined`. Numeric user IDs (Discord/Telegram/GitHub) can be ambiguous when multiple of those adapters are registered — call the platform's adapter directly (`adapter.getUser(userId)`) in that case.
+</Callout>
+
+Adapters that don't support user lookups will throw a `ChatError` with code `NOT_SUPPORTED`. Handle both cases if your bot runs on multiple platforms:
+
+```typescript
+import { ChatError } from "chat";
+
+try {
+  const user = await bot.getUser(userId);
+  if (!user) {
+    // User not found on this platform
+  }
+} catch (error) {
+  if (error instanceof ChatError && error.code === "NOT_SUPPORTED") {
+    // This adapter doesn't support user lookups
+  }
+}
+```
+
 ### thread
 
 Get a Thread handle by its thread ID. Useful for posting to threads outside of webhook contexts (e.g. cron jobs, external triggers).
