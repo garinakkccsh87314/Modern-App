@@ -1,5 +1,18 @@
 # @chat-adapter/slack
 
+## 4.30.0
+
+### Minor Changes
+
+- 922ba04: add lightweight Slack formatting primitives subpath
+- e3a600e: add lightweight Slack API primitives subpath
+- 3c93933: add lightweight Slack webhook primitives subpath
+
+### Patch Changes
+
+- chat@4.30.0
+- @chat-adapter/shared@4.30.0
+
 ## 4.29.0
 
 ### Minor Changes
